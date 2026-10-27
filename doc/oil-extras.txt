@@ -1,0 +1,236 @@
+*oil-extras.txt*    Select mode, dual pane and more for oil.nvim
+
+License: MIT
+
+==============================================================================
+CONTENTS                                                 *oil-extras-contents*
+
+    1. Introduction ............................ |oil-extras|
+    2. Setup ................................... |oil-extras-setup|
+    3. Actions ................................. |oil-extras-actions|
+    4. Select mode ............................. |oil-extras-select|
+    5. Dual pane ............................... |oil-extras-dual|
+    6. Entry picker ............................ |oil-extras-pick|
+    7. Details ................................. |oil-extras-details|
+    8. Statusline .............................. |oil-extras-statusline|
+    9. Lua API ................................. |oil-extras-api|
+   10. Health .................................. |oil-extras-health|
+
+==============================================================================
+1. INTRODUCTION                                                   *oil-extras*
+
+Additions to oil.nvim (https://github.com/stevearc/oil.nvim):
+
+- Select mode: mark entries anywhere in the listing, then copy, move,
+  rename or trash them together, through Oil's own write.
+- Dual pane: a second Oil pane beside the first, for moving files between
+  two directories.
+- An entry picker over the current listing, and file and grep pickers
+  scoped to the directory.
+- Size and mtime after each entry, painted as the stats arrive so the
+  listing is never held up.
+- Zip and unzip, a multi-file system clipboard, path yanks that work on
+  directories, a symlink action, and a key that applies edits and leaves.
+
+Requires Neovim 0.10 and oil.nvim. snacks.nvim is optional: the entry
+picker falls back to |vim.ui.select| without it, and the file and grep
+pickers need it.
+
+==============================================================================
+2. SETUP                                                    *oil-extras-setup*
+
+Nothing is bound by default. Bind actions in Oil's own `keymaps`, the way
+Oil's actions are bound (see |oil-extras-actions|), and call `setup` for
+the parts that run on their own: >lua
+    require("oil_extras").setup({
+      details = { enabled = true, hl = "OilExtrasDetails" },
+      keep_cursor = true,
+      select = { keys = { toggle = "<Space>", yank = "y", cut = "d",
+                          trash = "D", rename = "c", leave = "<Esc>" } },
+      dual = { keys = { other = { "<C-h>", "<C-l>" }, close = "q" } },
+      pick = { keys = { jump = "<S-CR>" } },
+    })
+<
+The values above are the defaults.
+
+    `details`       Size and mtime after each entry; see
+                    |oil-extras-details|. `enabled = false` turns it off.
+    `keep_cursor`   When Oil re-renders a directory you return to (its
+                    watcher saw a change while you were away), the cursor
+                    stays on the entry it was on. Matters only with Oil's
+                    `watch_for_changes = true`.
+    `select.keys`   The keys inside select mode; `false` leaves one
+                    unbound. See |oil-extras-select|.
+    `dual.keys`     Inside a dual-pane pair, each key in `other` moves to
+                    the other pane and `close` closes both.
+    `pick.keys`     In the entry picker, the key that lands on an entry
+                    without opening it.
+
+With lazy.nvim, Oil's keymaps have to be built once oil-extras is loaded,
+so use the function form of `opts` and list oil-extras as a dependency: >lua
+    {
+      "stevearc/oil.nvim",
+      dependencies = { "Chiarandini/oil-extras.nvim" },
+      opts = function()
+        local x = require("oil_extras.actions")
+        return {
+          keymaps = {
+            ["gm"] = x.select,
+            ["gV"] = x.dual_pane,
+            ["gz"] = x.zip,
+            ["Y"]  = x.copy_to_clipboard,
+          },
+        }
+      end,
+    },
+    { "Chiarandini/oil-extras.nvim", lazy = true, opts = {} },
+<
+==============================================================================
+3. ACTIONS                                                *oil-extras-actions*
+
+`require("oil_extras.actions")` is a table of actions shaped like Oil's own.
+Bind one directly, or with `opts` for the ones that take parameters: >lua
+    ["Yd"] = { require("oil_extras.actions").yank_path,
+               opts = { modify = ":h", register = "+" } },
+<
+When an action is wrapped with `opts`, give the `mode` in the wrapper if the
+action should work outside normal mode.
+
+    `select`            Enter select mode, toggling the entry under the
+                        cursor (or the visual range). Normal, visual.
+    `dual_pane`         Open a second pane beside this one; in a pair,
+                        close both.
+    `pick`              Pick an entry of this directory. `opts`: `filter`,
+                        `title`, `auto_select`. See |oil-extras-pick|.
+    `find_files`        snacks.nvim file picker under this directory.
+    `grep`              snacks.nvim grep under this directory.
+    `toggle_details`    Switch Oil between its configured columns and
+                        detail columns. `opts.columns` (default: icon,
+                        permissions, size, mtime).
+    `zip`               Zip the targets into one archive, asking its name.
+                        Normal, visual.
+    `unzip`             Extract the `.zip` targets, asking where. Normal,
+                        visual.
+    `copy_to_clipboard` Copy the targets as files, so a paste in the file
+                        manager copies them. Several files at once are
+                        macOS-only. Normal, visual.
+    `yank_path`         Yank the entry's path. `opts.modify` is a
+                        |fnamemodify()| modifier applied before a directory
+                        gets its trailing slash, so `:h` gives a
+                        directory's parent and `:t` its name.
+                        `opts.register` (default: |v:register|).
+    `open_dir_external` Open this directory in the system file manager.
+    `symlink`           Create a symlink here, asking target and name.
+    `save_and_leave`    Apply pending edits. From normal mode, also leave
+                        Oil, unless Oil asked for confirmation. From insert
+                        mode, end the edit and stay. Normal, insert.
+
+The targets of `zip`, `unzip` and `copy_to_clipboard` are the select-mode
+selection while the mode is on, else the visual range, else the entry under
+the cursor. `../` and lines not yet written are never targets.
+
+==============================================================================
+4. SELECT MODE                                             *oil-extras-select*
+
+Oil already copies and moves through the buffer: `V` over a run of lines,
+`y` or `d`, `p` in another directory, `:w`. Select mode is the same without
+the adjacency. Entering it (the `select` action) marks the entry under the
+cursor, highlighted with `OilExtrasSelected` (linked to |hl-Visual|), and
+shadows a few keys in the Oil buffer:
+
+    `<Space>`   toggle the entry; over a visual range, select it whole
+                unless all of it already is, then clear it
+    `y`         yank the selected lines; `p` in another directory and `:w`
+                copies
+    `d`         cut the selected lines; `p` and `:w` moves
+    `D`         delete and write at once; Oil confirms, and canceling puts
+                the entries back
+    `c`         rename the selected names with `s/pattern/replacement/`;
+                the result stays unsaved for review, and `:w` applies it
+    `<Esc>`     leave
+
+`/` and `?` are native search inside the mode, whatever they are bound to in
+Oil buffers otherwise. Leaving restores every mapping the mode shadowed.
+The mode ends after an action, on `<Esc>`, and when the directory leaves
+the screen.
+
+The rename pattern reads like |:s|: any punctuation delimiter, an empty
+pattern meaning the last search, and the flags `g`, `i` and `I`. Only the
+names are matched, never the id or icon in front of them, and a name the
+substitution would empty is left alone.
+
+==============================================================================
+5. DUAL PANE                                                 *oil-extras-dual*
+
+The `dual_pane` action opens a second Oil pane at the same directory: a
+vertical split beside a normal window, two side-by-side floats from a float.
+Each pane navigates on its own. Inside the pair, `<C-h>` and `<C-l>` move to
+the other pane and `q` closes both; the action again also closes both. When
+one pane closes, the other goes with it.
+
+==============================================================================
+6. ENTRY PICKER                                              *oil-extras-pick*
+
+The `pick` action lists the entries the Oil buffer shows: not recursive, and
+following the hidden-files toggle. `<CR>` opens the entry as `<CR>` in Oil
+would. `<S-CR>` lands the Oil cursor on it without opening it, so the usual
+Oil keys can act on it; it needs a terminal that tells `<S-CR>` from `<CR>`.
+
+`opts`:
+    `filter`        `fun(entry): boolean`, keep only matching entries
+    `title`         picker title (default: the directory)
+    `empty`         message when nothing matches
+    `auto_select`   open the entry at once when it is the only match
+
+Without snacks.nvim the list goes through |vim.ui.select|, which opens the
+choice and has no jump key.
+
+==============================================================================
+7. DETAILS                                                *oil-extras-details*
+
+Each entry gets its size and mtime as virtual text at the end of the line,
+in `OilExtrasDetails` (linked to |hl-Comment|). Oil can show these as real
+columns, but a column that needs a stat makes Oil stat every entry before
+it renders; here the listing renders at once and the text paints in as each
+stat returns. The text follows changes on disk with Oil's
+`watch_for_changes`, and steps aside while the real size or mtime column is
+shown (`toggle_details`).
+
+==============================================================================
+8. STATUSLINE                                          *oil-extras-statusline*
+
+While select mode is on, `vim.b.oil_extras_select` holds the number of
+selected entries, and is `nil` otherwise. A statusline can read it without
+requiring the plugin: >lua
+    local n = vim.b.oil_extras_select
+    if n then return ("SEL %d"):format(n) end
+<
+The statusline is redrawn whenever the count changes.
+
+==============================================================================
+9. LUA API                                                    *oil-extras-api*
+
+`require("oil_extras.select")`
+    `.enter(opts?)`     enter select mode, or toggle inside it;
+                        `opts.keys` overrides `select.keys` for this entry
+    `.leave(buf?)`      leave select mode
+    `.is_active(buf?)`  whether select mode is on
+    `.targets()`        `dir, targets` for a multi-entry action of your
+                        own: each target has `name`, `type` and an
+                        absolute `path`. Taking a non-empty selection ends
+                        the mode.
+
+`require("oil_extras.pick").pick(opts?)`     the entry picker
+`require("oil_extras.dual").open()`          the dual-pane toggle
+`require("oil_extras.clipboard").mac_copy_paths(paths)`
+    put files on the macOS pasteboard as Finder file references
+
+==============================================================================
+10. HEALTH                                                 *oil-extras-health*
+
+`:checkhealth oil_extras` checks the parts of oil.nvim this plugin reads
+that are not Oil's documented API, so an Oil update that moves one is
+reported rather than failing quietly. It also lists the optional tools:
+snacks.nvim, zip and unzip, and osascript on macOS.
+
+ vim:tw=78:ts=8:ft=help:norl:
