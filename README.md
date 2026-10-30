@@ -21,7 +21,8 @@ bind in Oil's own `keymaps`:
 - Neovim 0.10+
 - [oil.nvim](https://github.com/stevearc/oil.nvim)
 - Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for the
-  pickers (the entry picker falls back to `vim.ui.select`)
+  pickers (the entry picker falls back to `vim.ui.select`; the file and
+  grep pickers take any other through the `picker` option)
 - Optional: `zip` and `unzip` (PowerShell on Windows), `osascript` on macOS
 
 ## Setup

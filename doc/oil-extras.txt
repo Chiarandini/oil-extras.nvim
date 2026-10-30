@@ -34,7 +34,7 @@ Additions to oil.nvim (https://github.com/stevearc/oil.nvim):
 
 Requires Neovim 0.10 and oil.nvim. snacks.nvim is optional: the entry
 picker falls back to |vim.ui.select| without it, and the file and grep
-pickers need it.
+pickers need it unless `picker` names another.
 
 ==============================================================================
 2. SETUP                                                    *oil-extras-setup*
@@ -49,6 +49,7 @@ the parts that run on their own: >lua
                           trash = "D", rename = "c", leave = "<Esc>" } },
       dual = { keys = { other = { "<C-h>", "<C-l>" }, close = "q" } },
       pick = { keys = { jump = "<S-CR>" } },
+      picker = false,
     })
 <
 The values above are the defaults.
@@ -65,6 +66,11 @@ The values above are the defaults.
                     the other pane and `close` closes both.
     `pick.keys`     In the entry picker, the key that lands on an entry
                     without opening it.
+    `picker`        A function opening the file and grep pickers instead
+                    of snacks.nvim: `function(source, opts)`, where
+                    `source` is "files" or "grep" and `opts` holds `cwd`
+                    (this directory), `title`, and snacks' `hidden` and
+                    `ignored`.
 
 With lazy.nvim, Oil's keymaps have to be built once oil-extras is loaded,
 so use the function form of `opts` and list oil-extras as a dependency: >lua
@@ -102,8 +108,10 @@ action should work outside normal mode.
                         close both.
     `pick`              Pick an entry of this directory. `opts`: `filter`,
                         `title`, `auto_select`. See |oil-extras-pick|.
-    `find_files`        snacks.nvim file picker under this directory.
-    `grep`              snacks.nvim grep under this directory.
+    `find_files`        File picker under this directory (snacks.nvim, or
+                        `picker`).
+    `grep`              Grep under this directory (snacks.nvim, or
+                        `picker`).
     `toggle_details`    Switch Oil between its configured columns and
                         detail columns. `opts.columns` (default: icon,
                         permissions, size, mtime).

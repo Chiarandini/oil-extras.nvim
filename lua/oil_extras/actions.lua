@@ -30,20 +30,23 @@ local function picker_title(dir, what)
   return ("Oil %s (%s)"):format(what, scope)
 end
 
-local function snacks_picker(what, source)
+local function dir_picker(what, source)
   local dir = require("oil").get_current_dir()
   if not dir then return end
-  local ok, Snacks = pcall(require, "snacks")
-  if not (ok and Snacks.picker) then
-    vim.notify("Oil: this picker needs snacks.nvim", vim.log.levels.WARN)
-    return
-  end
-  Snacks.picker[source]({
+  local opts = {
     cwd = dir,
     title = picker_title(dir, what),
     hidden = compat.show_hidden(),
     ignored = true,
-  })
+  }
+  local picker = require("oil_extras.config").options.picker
+  if picker then return picker(source, opts) end
+  local ok, Snacks = pcall(require, "snacks")
+  if not (ok and Snacks.picker) then
+    vim.notify("Oil: this picker needs snacks.nvim, or a `picker` in setup()", vim.log.levels.WARN)
+    return
+  end
+  Snacks.picker[source](opts)
 end
 
 M.select = {
@@ -68,13 +71,13 @@ M.pick = {
 }
 
 M.find_files = {
-  desc = "Find files under this directory (snacks.nvim)",
-  callback = function() snacks_picker("Files", "files") end,
+  desc = "Find files under this directory",
+  callback = function() dir_picker("Files", "files") end,
 }
 
 M.grep = {
-  desc = "Grep under this directory (snacks.nvim)",
-  callback = function() snacks_picker("Grep", "grep") end,
+  desc = "Grep under this directory",
+  callback = function() dir_picker("Grep", "grep") end,
 }
 
 M.toggle_details = {

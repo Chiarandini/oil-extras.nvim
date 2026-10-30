@@ -36,6 +36,10 @@ M.defaults = {
   pick = {
     keys = { jump = "<S-CR>" },
   },
+  -- Opens the file and grep pickers instead of snacks.nvim:
+  -- `function(source, opts)`, `source` being "files" or "grep" and `opts`
+  -- holding `cwd`, `title`, and snacks' `hidden` and `ignored`.
+  picker = false,
 }
 
 M.options = vim.deepcopy(M.defaults)
